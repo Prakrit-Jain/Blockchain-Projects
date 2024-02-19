@@ -1,13 +1,20 @@
 const { ethers } = require('hardhat');
 
-// define the address for contract manager
-const CONTRACT_MANAGER_ADDRESS = "";
+// array of contract addresses to pass in contructor
+const contractAddresses = [];
+
+// array of contract descriptions to pass in constructor
+const descriptions = [];
+
+// max loops limit to pass in constructor
+const maxLoopsLimit = 100;
 
 async function main() {
+
   const contractManagerFactory = await ethers.getContractFactory("ContractManager");
 
   console.log("contract manager is deploying........");
-  const contractManager = await contractManagerFactory.deploy(CONTRACT_MANAGER_ADDRESS);
+  const contractManager = await contractManagerFactory.deploy(contractAddresses, descriptions, maxLoopsLimit);
 
   console.log("contractManager deployed at address: ", await contractManager.getAddress());
 }
