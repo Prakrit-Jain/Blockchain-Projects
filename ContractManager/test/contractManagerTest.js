@@ -18,7 +18,7 @@ describe("ContractManager", () => {
         const [deployer, user1, user2] = await ethers.getSigners();
 
         const contractManagerFactory = await ethers.getContractFactory("ContractManager");
-        const contractManager = await contractManagerFactory.deploy(deployer.address);
+        const contractManager = await contractManagerFactory.deploy([], [], 10);
 
         const mockContractFactory = await ethers.getContractFactory("MockContract");
         const mockContract1 = await mockContractFactory.deploy();
@@ -64,6 +64,39 @@ describe("ContractManager", () => {
         });
     });
 
+    describe("addContractsInBatch", () => {
+        it("should revert when called by unauthorized account", async () => {
+            const tx = contractManager.connect(user1).addContractsInBatch([await mockContract1.getAddress()], [description]);
+            await expect(tx).to.be.revertedWithCustomError(contractManager, "AccessControlUnauthorizedAccount");
+        });
+
+        it("should revert when input array length mismatches", async () => {
+            const tx = contractManager.addContractsInBatch([await mockContract1.getAddress()], []);
+            await expect(tx).to.be.revertedWithCustomError(contractManager, "InputArrayLengthMisMatch");
+        });
+
+        it("should revert when input array length is greater than maxLoopsLimit", async () => {
+            await contractManager.setMaxLoopsLimit(1);
+            const tx = contractManager.addContractsInBatch([await mockContract1.getAddress(), await mockContract2.getAddress()], [description, description]);
+            await expect(tx).to.be.revertedWithCustomError(contractManager, "MaxLoopsLimitExceeded");
+        });
+
+        it("should emit event on success", async () => {
+            const tx = contractManager.addContractsInBatch([await mockContract1.getAddress(), await mockContract2.getAddress()], [description, description]);
+
+            await expect(tx).to.emit(contractManager, "ContractAdded").withArgs(await mockContract1.getAddress(), description, true);
+            await expect(tx).to.emit(contractManager, "ContractAdded").withArgs(await mockContract2.getAddress(), description, true);
+
+            let details = await contractManager.contractDetails(await mockContract1.getAddress());
+            expect(details.description).to.equal(description);
+            expect(details.exists).to.equal(true);
+
+            details = await contractManager.contractDetails(await mockContract2.getAddress());
+            expect(details.description).to.equal(description);
+            expect(details.exists).to.equal(true);
+        });
+    });
+
     describe("updateContractDescription", () => {
         it("should revert when called by unauthorized account", async () => {
             const tx = contractManager.connect(user1).updateContractDescription(await mockContract1.getAddress(), description);
@@ -81,6 +114,34 @@ describe("ContractManager", () => {
 
             const tx = await contractManager.updateContractDescription(await mockContract1.getAddress(), updatedDescription);
             await expect(tx).to.emit(contractManager, "ContractDescriptionUpdated").withArgs(await mockContract1.getAddress(), description, updatedDescription);
+        });
+    });
+
+    describe("updateContractsDescriptionsInBatch", () => {
+        it("should revert when called by unauthorized account", async () => {
+            const tx = contractManager.connect(user1).updateContractsDescriptionsInBatch([await mockContract1.getAddress()], [description]);
+            await expect(tx).to.be.revertedWithCustomError(contractManager, "AccessControlUnauthorizedAccount");
+        });
+
+
+        it("should revert when input array length mismatches", async () => {
+            const tx = contractManager.updateContractsDescriptionsInBatch([await mockContract1.getAddress()], []);
+            await expect(tx).to.be.revertedWithCustomError(contractManager, "InputArrayLengthMisMatch");
+        });
+
+        it("should revert when input array length is greater than maxLoopsLimit", async () => {
+            await contractManager.setMaxLoopsLimit(1);
+            const tx = contractManager.updateContractsDescriptionsInBatch([await mockContract1.getAddress(), await mockContract2.getAddress()], [description, description]);
+            await expect(tx).to.be.revertedWithCustomError(contractManager, "MaxLoopsLimitExceeded");
+        });
+
+        it("should emit event on success", async () => {
+            await contractManager.addContractsInBatch([await mockContract1.getAddress(), await mockContract2.getAddress()], [description, description]);
+            const updatedDescription = "this is the updated mock contract";
+
+            const tx = await contractManager.updateContractsDescriptionsInBatch([await mockContract1.getAddress(), await mockContract2.getAddress()], [updatedDescription, updatedDescription]);
+            await expect(tx).to.emit(contractManager, "ContractDescriptionUpdated").withArgs(await mockContract1.getAddress(), description, updatedDescription);
+            await expect(tx).to.emit(contractManager, "ContractDescriptionUpdated").withArgs(await mockContract2.getAddress(), description, updatedDescription);
         });
     });
 
@@ -104,6 +165,48 @@ describe("ContractManager", () => {
             const details = await contractManager.contractDetails(await mockContract1.getAddress());
             expect(details.description).to.equal("");
             expect(details.exists).to.equal(false);
+        });
+    });
+
+    describe("removeContractsInBatch", () => {
+        it("should revert when called by unauthorized account", async () => {
+            const tx = contractManager.connect(user1).removeContractsInBatch([await mockContract1.getAddress()]);
+            await expect(tx).to.be.revertedWithCustomError(contractManager, "AccessControlUnauthorizedAccount");
+        });
+
+        it("should revert when input array length is greater than maxLoopsLimit", async () => {
+            await contractManager.setMaxLoopsLimit(1);
+            const tx = contractManager.removeContractsInBatch([await mockContract1.getAddress(), await mockContract2.getAddress()]);
+            await expect(tx).to.be.revertedWithCustomError(contractManager, "MaxLoopsLimitExceeded");
+        });
+
+        it("should emit event on success", async () => {
+            await contractManager.addContractsInBatch([await mockContract1.getAddress(), await mockContract2.getAddress()], [description, description]);
+
+            const tx = contractManager.removeContractsInBatch([await mockContract1.getAddress(), await mockContract2.getAddress()]);
+            await expect(tx).to.emit(contractManager, "ContractRemoved").withArgs(await mockContract1.getAddress(), false);
+            await expect(tx).to.emit(contractManager, "ContractRemoved").withArgs(await mockContract2.getAddress(), false);
+
+            let details = await contractManager.contractDetails(await mockContract1.getAddress());
+            expect(details.description).to.equal("");
+            expect(details.exists).to.equal(false);
+
+            details = await contractManager.contractDetails(await mockContract2.getAddress());
+            expect(details.description).to.equal("");
+            expect(details.exists).to.equal(false);
+        });
+    });
+
+    describe("setMaxLoopsLimit", () => {
+        it("should revert when called by unauthorized account", async () => {
+            const tx = contractManager.connect(user1).setMaxLoopsLimit(5);
+            await expect(tx).to.be.revertedWithCustomError(contractManager, "AccessControlUnauthorizedAccount");
+        });
+
+        it("should emit event on success", async () => {
+            const tx = contractManager.setMaxLoopsLimit(5);
+            await expect(tx).to.emit(contractManager, "MaxLoopsLimitUpdated");
+            expect(await contractManager.maxLoopsLimit()).to.equal(5);
         });
     });
 
